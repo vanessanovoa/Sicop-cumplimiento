@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SICOP · Control de cumplimiento</title>
+<meta name="robots" content="noindex">
+<link rel="preload" href="vendor/fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ACCESO -->
+<div id="login" class="login" hidden>
+  <section class="login-brand">
+    <div class="logo"><span class="mark"></span><strong>SICOP</strong></div>
+    <div class="login-hero">
+      <span class="pill">Registro centralizado</span>
+      <h1>Cumplimiento documental, bajo control.</h1>
+      <p>Vencimientos de empleados, proveedores y vehículos de todas las organizaciones, en un único panel.</p>
+      <ul class="login-points">
+        <li><svg class="ico"><use href="vendor/icons.svg#i-circle-check"/></svg>Alertas de vencimiento y trámites pendientes</li>
+        <li><svg class="ico"><use href="vendor/icons.svg#i-circle-check"/></svg>Reportes ejecutivos en PDF</li>
+        <li><svg class="ico"><use href="vendor/icons.svg#i-circle-check"/></svg>Acceso según tu rol: administrador, trabajador o revisor</li>
+      </ul>
+    </div>
+    <small>© SICOP · Uso interno</small>
+  </section>
+  <section class="login-form">
+    <form id="form-login" class="login-box" autocomplete="on">
+      <h2>Iniciar sesión</h2>
+      <p>Ingresá con tu correo y contraseña.</p>
+      <label class="campo">Correo electrónico<input id="login-user" type="email" name="username" autocomplete="username" autocapitalize="off" spellcheck="false" required></label>
+      <label class="campo">Contraseña<input id="login-pass" type="password" name="password" autocomplete="current-password" required></label>
+      <button id="btn-login" class="btn primary lg block" type="submit">Ingresar</button>
+      <p id="login-error" class="error" role="alert"></p>
+    </form>
+    <form id="form-clave" class="login-box" autocomplete="off" hidden>
+      <h2>Elegí tu contraseña</h2>
+      <p>Es tu primer ingreso (o un administrador restableció tu clave). Definí una contraseña nueva de al menos 10 caracteres.</p>
+      <label class="campo">Nueva contraseña<input id="clave-1" type="password" autocomplete="new-password" required></label>
+      <label class="campo">Repetir contraseña<input id="clave-2" type="password" autocomplete="new-password" required></label>
+      <button id="btn-clave" class="btn primary lg block" type="submit">Guardar y continuar</button>
+      <button id="clave-salir" class="btn block" type="button" style="margin-top:10px">Cancelar</button>
+      <p id="clave-error" class="error" role="alert"></p>
+    </form>
+  </section>
+</div>
+
+<!-- APLICACIÓN -->
+<div id="shell" class="shell" hidden>
+  <div id="scrim" class="scrim" hidden></div>
+  <aside class="side" id="side">
+    <div class="logo dark"><span class="mark"></span><strong>SICOP</strong></div>
+    <nav id="nav" aria-label="Principal"></nav>
+  </aside>
+
+  <div class="main-col">
+    <header class="topbar">
+      <button id="btn-menu" class="icon-btn only-mobile" aria-label="Abrir menú"><svg class="ico"><use href="vendor/icons.svg#i-panel-left"/></svg></button>
+      <div class="crumbs"><span>SICOP</span><svg class="ico sm"><use href="vendor/icons.svg#i-chevron-right"/></svg><strong id="crumb">Panel</strong></div>
+      <label class="search-global"><svg class="ico"><use href="vendor/icons.svg#i-search"/></svg>
+        <input id="buscar" type="search" placeholder="Buscar persona, CUIL, dominio o documento…" aria-label="Buscar"></label>
+      <div class="top-actions">
+        <div class="pop-wrap" id="wrap-org">
+          <button id="btn-org" class="chip-btn" aria-haspopup="true"><svg class="ico"><use href="vendor/icons.svg#i-building-2"/></svg><span id="org-label">Organizaciones</span><svg class="ico sm"><use href="vendor/icons.svg#i-chevron-down"/></svg></button>
+          <div id="pop-org" class="popover" hidden></div>
+        </div>
+        <span class="chip-static" title="Fecha de corte"><svg class="ico"><use href="vendor/icons.svg#i-calendar"/></svg><span id="corte-chip"></span></span>
+        <div class="pop-wrap">
+          <button id="btn-bell" class="icon-btn" aria-label="Alertas"><svg class="ico"><use href="vendor/icons.svg#i-bell"/></svg><span id="bell-n" class="dot-n" hidden></span></button>
+          <div id="pop-bell" class="popover wide" hidden></div>
+        </div>
+        <div class="pop-wrap">
+          <button id="btn-user" class="user-btn" aria-haspopup="true"><span class="avatar" id="avatar">?</span><span class="user-meta"><b id="email">—</b><small id="rol">—</small></span><svg class="ico sm"><use href="vendor/icons.svg#i-chevron-down"/></svg></button>
+          <div id="pop-user" class="popover right" hidden>
+            <a class="menu-item" href="#/cuenta"><svg class="ico"><use href="vendor/icons.svg#i-lock"/></svg>Mi cuenta</a>
+            <button id="salir" class="menu-item"><svg class="ico"><use href="vendor/icons.svg#i-log-out"/></svg>Cerrar sesión</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="content">
+      <div class="page-head">
+        <div><h1 id="page-title">Panel</h1><p id="page-sub" class="muted"></p></div>
+        <div id="head-actions" class="acciones">
+          <button id="pdf-filtrado" class="btn primary"><svg class="ico"><use href="vendor/icons.svg#i-download"/></svg>PDF · filtros activos</button>
+          <button id="pdf-completo" class="btn"><svg class="ico"><use href="vendor/icons.svg#i-file-text"/></svg>PDF completo</button>
+        </div>
+      </div>
+
+      <!-- PANEL -->
+      <section id="view-panel" class="view">
+        <div id="vacio" class="card vacio" hidden>
+          <div class="vacio-ico"><svg class="ico xl"><use href="vendor/icons.svg#i-inbox"/></svg></div>
+          <h2>Todavía no hay datos para analizar</h2>
+          <p id="vacio-txt"></p>
+          <a id="vacio-btn" class="btn primary" href="#/importar">Importar Excel</a>
+        </div>
+        <div id="contenido" hidden>
+          <div class="hero-row">
+            <div class="hero card-blue" id="hero"></div>
+            <div class="kpis" id="kpis"></div>
+          </div>
+          <div class="grid-2">
+            <div class="card"><div class="card-head"><div><h2>Vencimientos próximos</h2><p class="muted">Documentos por semana en los próximos 90 días</p></div></div><div class="chart-box"><canvas id="ch-semanas" aria-label="Vencimientos por semana"></canvas></div></div>
+            <div class="card"><div class="card-head"><div><h2>Estado por organización</h2><p class="muted">Cantidad de documentos</p></div></div><div class="chart-box"><canvas id="ch-orgs" aria-label="Estado por organización"></canvas></div></div>
+          </div>
+          <div class="grid-3">
+            <div class="card"><div class="card-head"><div><h2>Requieren acción</h2><p class="muted">Los vencimientos más antiguos</p></div></div><ul id="criticos" class="lista"></ul></div>
+            <div class="card"><div class="card-head"><div><h2>Cumplimiento por categoría</h2><p class="muted">% de documentos al día</p></div></div><div id="categorias" class="cat-list"></div></div>
+          </div>
+          <div class="card">
+            <div class="card-head wrap">
+              <div><h2 id="titulo-detalle">Detalle</h2><p class="muted" id="tabla-info"></p></div>
+              <div class="chips" id="f-estado"></div>
+            </div>
+            <div class="filtros-linea"><div class="chips" id="f-categoria"></div></div>
+            <div class="tabla-wrap"><table id="tabla"><thead></thead><tbody></tbody></table></div>
+            <div class="paginacion"><span id="pag-info" class="muted"></span><div><button id="pag-prev" class="btn sm">Anterior</button><button id="pag-next" class="btn sm">Siguiente</button></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- OTRAS VISTAS -->
+      <section id="view-main" class="view" hidden></section>
+    </main>
+  </div>
+</div>
+
+<div id="toasts" class="toasts" aria-live="polite"></div>
+
+<script src="vendor/jspdf.umd.min.js"></script>
+<script src="vendor/jspdf.plugin.autotable.min.js"></script>
+<script src="vendor/chart.umd.js"></script>
+<script src="vendor/supabase.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
