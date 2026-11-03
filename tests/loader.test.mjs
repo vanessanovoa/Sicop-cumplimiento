@@ -40,3 +40,15 @@ test("archivo de muestra coincide con la versión Python", { skip: !MUESTRA }, (
     "Proveedores|Al día": 14, "Proveedores|Por vencer": 3, "Proveedores|Vencido": 6,
     "Vehículos|Al día": 67, "Vehículos|Por vencer": 1, "Vehículos|Vencido": 7 });
 });
+
+test("limpiarLibro: mismo resultado que el archivo original y mucho más rápido", { skip: !MUESTRA }, async () => {
+  const { limpiarLibro } = await import("../src/limpiar.js");
+  const buf = fs.readFileSync(MUESTRA);
+  const t = Date.now(), limpio = limpiarLibro(buf), ms = Date.now() - t;
+  const a = leerExcel(XLSX, limpio, "CMAS F-1.xlsx"), b = leerExcel(XLSX, buf, "CMAS F-1.xlsx");
+  assert.deepEqual(a.filas, b.filas);
+  assert.deepEqual(a.avisos, b.avisos);
+  assert.ok(limpio.length < buf.length / 2, "el libro limpio pesa mucho menos");
+  assert.ok(ms < 8000, `limpieza lenta: ${ms} ms`);
+  assert.deepEqual(limpiarLibro(new Uint8Array([1, 2, 3]).buffer), new Uint8Array([1, 2, 3]), "un archivo inválido se devuelve tal cual");
+});
