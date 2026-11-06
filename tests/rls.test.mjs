@@ -11,7 +11,7 @@ const U = { admin: "00000000-0000-0000-0000-000000000001", trab: "00000000-0000-
 async function nuevaBd() {
   const db = new PGlite();
   await db.exec(sql("./sql/stub.sql"));
-  for (const f of ["001_schema", "002_rls", "003_funciones"]) await db.exec(sql(`../supabase/migrations/${f}.sql`));
+  for (const f of ["001_schema", "002_rls", "003_funciones", "004_docs_monotributo"]) await db.exec(sql(`../supabase/migrations/${f}.sql`));
   await db.exec(`grant select, insert, update, delete on all tables in schema public to authenticated;
     grant usage on all sequences in schema public to authenticated;`);
   for (const [k, id] of Object.entries(U)) await db.exec(`insert into auth.users (id,email) values ('${id}','${k}@x.com')`);

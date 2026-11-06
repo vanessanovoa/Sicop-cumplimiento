@@ -168,7 +168,7 @@ async function seedDev() {
   const be = crearBackendMemoria({ perfil: { user_id: "u-dev", email: `${rol}@demo.test`, nombre: `Demo ${ROLES[rol] || rol}`, rol: "admin", activo: true, debe_cambiar_clave: q.has("clave") } });
   const m = q.get("muestra");
   if (m) {
-    const cmas = await be.crearOrg("CMAS"); const demo = q.has("demo") ? await be.crearOrg("ARCOR") : null;
+    const orgA = await be.crearOrg("Empresa A"); const demo = q.has("demo") ? await be.crearOrg("Empresa B") : null;
     await be.crearOrg("Empresa vacía");
     const { filasAEntidades } = await import("./modelo.js");
     const buf = await (await fetch(m)).arrayBuffer();
@@ -177,7 +177,7 @@ async function seedDev() {
       w.onmessage = (e) => e.data.ok ? resolve(e.data) : reject(new Error(e.data.error));
       w.postMessage({ id: 1, buffer: buf.slice(0), nombre, empresa: org }, []);
     });
-    for (const [nombre, org] of [["CMAS F-1.xlsx", cmas], ...(demo ? [["ARCOR F-1.xlsx", demo]] : [])]) {
+    for (const [nombre, org] of [["Empresa A F-1.xlsx", orgA], ...(demo ? [["Empresa B F-1.xlsx", demo]] : [])]) {
       const r = await leer(nombre, org.nombre), { entidades } = filasAEntidades(r.filas);
       await be.importar(org.id, entidades, nombre, null);
     }
@@ -194,7 +194,7 @@ async function arrancar() {
     const f = new URLSearchParams(location.search).get("ficha");      // solo para capturas de pantalla locales
     if (f) { const [n, t] = f.startsWith("nuevo-") ? [true, f.slice(6)] : [false, f]; abrirFicha(t, n ? null : st.datos.entidades.find((e) => e.tipo === t && e.documentos.some((d) => !d.vencimiento))); }
     const arch = new URLSearchParams(location.search).get("archivo");   // solo capturas locales: simula elegir un Excel
-    if (arch) { const b = await (await fetch(arch)).arrayBuffer(); procesar([new File([b], "CMAS F-1 Objetivos.xlsx")], render); }
+    if (arch) { const b = await (await fetch(arch)).arrayBuffer(); procesar([new File([b], "Empresa A F-1 Objetivos.xlsx")], render); }
     return;
   }
   if (!configurado()) { st.backend = null; pantalla("login", "Falta configurar Supabase: completá docs/js/config.js (ver README-SUPABASE.md)."); $("btn-login").disabled = true; return; }

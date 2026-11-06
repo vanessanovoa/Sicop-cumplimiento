@@ -24,17 +24,86 @@ test("límites de reglas", () => {
 });
 
 test("nombre de empresa", () => {
-  assert.equal(nombreEmpresa("CMAS F-1 Objetivos del Cliente SICOP(Documentación).xlsx"), "CMAS");
+  assert.equal(nombreEmpresa("Empresa A F-1 Objetivos del Cliente SICOP(Documentación).xlsx"), "Empresa A");
+  assert.equal(nombreEmpresa("Empresa A F-1 Objetivos del Cliente SICOP(Documentación) (1).xlsx"), "Empresa A");
+  assert.equal(nombreEmpresa("_F-1 Objetivos del Cliente SICOP(Documentación).xlsx"), "", "sin empresa en el nombre");
+  assert.equal(nombreEmpresa("SICOP EMPRESA DEMO S.A.xlsx"), "SICOP EMPRESA DEMO S.A");
+});
+
+// Libro mínimo en memoria con las tres hojas (aoa = filas; las fechas como número de serie con formato).
+const sinHojas = (avisos) => avisos.filter((a) => !a.startsWith("No se encontró la hoja"));
+function libro({ emp, veh, prov }) {
+  const wb = XLSX.utils.book_new();
+  const hoja = (aoa, fechas = []) => { const ws = XLSX.utils.aoa_to_sheet(aoa); fechas.forEach(([ref, v]) => { ws[ref] = { t: "n", v, z: "d/m/yyyy" }; }); return ws; };
+  if (emp) XLSX.utils.book_append_sheet(wb, hoja(...emp), "Empleados");
+  if (veh) XLSX.utils.book_append_sheet(wb, hoja(...veh), "Vehículos");
+  if (prov) XLSX.utils.book_append_sheet(wb, hoja(...prov), "Proveedores");
+  return XLSX.write(wb, { type: "array", bookType: "xlsx" });
+}
+
+test("una celda de fecha ilegible (#####) no impide leer el archivo y se avisa", () => {
+  const buf = libro({ emp: [[
+    ["Apellido", "Nombre", "ABM", "Cuil", null, "Apto Médico", null, "DNI"],
+    ["APELLIDO UNO", "NOMBRE", "Alta", "20111111112", null, null, null, null],
+    ["APELLIDO DOS", "NOMBRE", "Alta", "27333333339", null, null, null, null],
+  ], [["F2", 9999999], ["H2", 47000], ["F3", 47000], ["H3", 47000]]] });
+  const { filas, avisos } = leerExcel(XLSX, buf, "X F-1.xlsx");
+  assert.equal(filas.length, 4);
+  const apto = filas.find((f) => f.entidad === "APELLIDO UNO NOMBRE" && f.documento === "Apto médico");
+  assert.match(String(apto.valor), /ilegible/);
+  assert.equal(evaluar(apto.valor, false, true, HOY).estado, VENCIDO);
+  assert.deepEqual(sinHojas(avisos), ["Empleados fila 2 (APELLIDO UNO NOMBRE): 'Apto médico' con dato inválido ('fecha ilegible (9999999)'); se carga sin fecha."]);
+});
+
+test("documentos opcionales de monotributistas: vacío no se audita, con fecha sí", () => {
+  const buf = libro({ emp: [[
+    ["Apellido", "Nombre", "ABM", "Cuil", null, "DNI", null, "Seg accidentes Personales", null, "Pago monotributo"],
+    ["APELLIDO UNO", "NOMBRE", "Alta", "20111111112", null, "1/1/2030", null, "1/1/2030", null, null],
+  ]] });
+  const { filas } = leerExcel(XLSX, buf, "X F-1.xlsx");
+  const reg = construirRegistros(filas, HOY);
+  assert.deepEqual(reg.map((r) => `${r.documento}|${r.estado}`).sort(),
+    ["DNI|Al día", "Seguro de accidentes personales|Al día"]);
+});
+
+test("fechas mal tipeadas generan aviso (se cargan sin fecha)", () => {
+  const buf = libro({ veh: [[
+    ["Marca", "Modelo", "Dominio", "Alta Sicop", null, "VTV", null, "Cuota"],
+    ["MARCA", "MODELO", "AB123CD", "SI", null, "1/1/2027", null, "3111/2'26"],
+  ]] });
+  const { avisos } = leerExcel(XLSX, buf, "X F-1.xlsx");
+  assert.deepEqual(sinHojas(avisos), ["Vehículos fila 2 (AB123CD): 'Cuota' con dato inválido ('3111/2'26'); se carga sin fecha."]);
+});
+
+test("Proveedores: columna de grupo con otro nombre; secciones de subcontratistas no se importan", () => {
+  const prov = (cabGrupo) => libro({ prov: [[
+    [cabGrupo, "Documentos", null, null, "DESA", "FRECUENCIA"],
+    ["FORMULARIOS", "FORMULARIO GENERAL", null, null, "8/11/2026", "mensual"],
+    ["EDIFICIO", "ATS EDIFICIO", null, null, "16/10/2026", "semestral"],
+    ["PERSONA UNO", null, null, null, null, null],
+    ["FORMULARIOS", "FORMULARIO GENERAL", null, null, "6/11/2026", "mensual"],
+    ["EDIFICIO", "ATS EDIFICIO", null, null, "16/4/2027", "semestral"],
+    ["PERSONA DOS", null, null, null, null, null],
+    ["FORMULARIOS", "FORMULARIO GENERAL", null, null, "7/11/2026", "mensual"],
+  ]] });
+  for (const cabGrupo of ["Requisito", "Requisitos", "CARPETA SICOP"]) {
+    const { filas, avisos } = leerExcel(XLSX, prov(cabGrupo), "X F-1.xlsx");
+    assert.deepEqual(sinHojas(avisos), [
+      "Proveedores: 2 documento(s) del subcontratista 'PERSONA UNO' no se importan (se cargan a mano).",
+      "Proveedores: 1 documento(s) del subcontratista 'PERSONA DOS' no se importan (se cargan a mano)."], cabGrupo);
+    assert.deepEqual(filas.map((f) => `${f.subgrupo}|${f.entidad}|${f.valor}`),
+      ["FORMULARIOS|FORMULARIO GENERAL|8/11/2026", "EDIFICIO|ATS EDIFICIO|16/10/2026"], cabGrupo);
+  }
 });
 
 const MUESTRA = process.env.SICOP_MUESTRA;
 test("archivo de muestra coincide con la versión Python", { skip: !MUESTRA }, () => {
-  const { empresa, filas, avisos } = leerExcel(XLSX, fs.readFileSync(MUESTRA), "CMAS F-1 Objetivos.xlsx");
+  const { empresa, filas, avisos } = leerExcel(XLSX, fs.readFileSync(MUESTRA), "Empresa A F-1 Objetivos.xlsx");
   const reg = construirRegistros(filas, HOY);
   const cuenta = {};
   reg.forEach((r) => { const k = `${r.categoria}|${r.estado}`; cuenta[k] = (cuenta[k] || 0) + 1; });
-  assert.equal(empresa, "CMAS");
-  assert.deepEqual(avisos, []);
+  assert.equal(empresa, "Empresa A");
+  assert.deepEqual(avisos.filter((a) => !/dato inválido/.test(a)), []);
   assert.deepEqual(cuenta, {
     "Empleados|Al día": 223, "Empleados|Pendiente de aprobación": 12, "Empleados|Vencido": 25,
     "Proveedores|Al día": 14, "Proveedores|Por vencer": 3, "Proveedores|Vencido": 6,
@@ -45,7 +114,7 @@ test("limpiarLibro: mismo resultado que el archivo original y mucho más rápido
   const { limpiarLibro } = await import("../src/limpiar.js");
   const buf = fs.readFileSync(MUESTRA);
   const t = Date.now(), limpio = limpiarLibro(buf), ms = Date.now() - t;
-  const a = leerExcel(XLSX, limpio, "CMAS F-1.xlsx"), b = leerExcel(XLSX, buf, "CMAS F-1.xlsx");
+  const a = leerExcel(XLSX, limpio, "Empresa A F-1.xlsx"), b = leerExcel(XLSX, buf, "Empresa A F-1.xlsx");
   assert.deepEqual(a.filas, b.filas);
   assert.deepEqual(a.avisos, b.avisos);
   assert.ok(limpio.length < buf.length / 2, "el libro limpio pesa mucho menos");

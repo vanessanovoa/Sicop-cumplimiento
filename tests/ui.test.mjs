@@ -33,7 +33,7 @@ async function montar(rol, ents = [entidad("e1")]) {
   document.body.querySelectorAll("dialog,.drawer-root").forEach((n) => n.remove());
   $$("#toasts .toast").forEach((n) => n.remove());
   const be = crearBackendMemoria({ perfil: { user_id: "me", email: "x@x.com", nombre: "X", rol, activo: true, debe_cambiar_clave: false },
-    orgs: [{ id: "o1", nombre: "CMAS", activa: true }], entidades: ents.map((e) => structuredClone(e)) });
+    orgs: [{ id: "o1", nombre: "Empresa A", activa: true }], entidades: ents.map((e) => structuredClone(e)) });
   st.backend = be; st.perfil = be.perfil; st.vista = "x";
   st.recargar = async () => { aplicarDatos(await be.cargar()); };
   await st.recargar();
@@ -157,7 +157,7 @@ test("organizaciones: crear y desactivar; la lista respeta el estado", async () 
   poner(q("dialog [name=nombre]"), "Nueva SA"); await okModal(); await espera(20);
   assert.ok(be._bd.orgs.some((o) => o.nombre === "Nueva SA"));
   q("#o-nueva", cont).click(); await espera();
-  poner(q("dialog [name=nombre]"), "cmas"); await okModal();
+  poner(q("dialog [name=nombre]"), "empresa a"); await okModal();
   assert.match(q("dialog [data-err]").textContent, /Ya existe/, "nombre duplicado");
   document.querySelectorAll("dialog").forEach((d) => d.remove());
 });

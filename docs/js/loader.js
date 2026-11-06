@@ -10,6 +10,9 @@ const DOCS_EMPLEADOS = [
   ["Apto médico", ["apto medico"], true], ["DNI", ["dni"], true],
   ["Licencia de conducir", ["licencia de conducir"], true],
   ["Capacitación", ["capacitacion"], true], ["Entrega EPP", ["entrega epp"], true],
+  // Opcionales (solo monotributistas): vacío = no se audita.
+  ["Seguro de accidentes personales", ["seg accidentes personales", "seguro de accidentes personales", "seg. accidentes personales"], false],
+  ["Pago monotributo", ["pago monotributo", "monotributo"], false],
 ];
 const DOCS_VEHICULOS = [
   ["VTV", ["vtv"], true], ["Póliza", ["poliza"], true], ["Cuota", ["cuota"], true],
@@ -21,15 +24,21 @@ export const norm = (t) => t == null ? "" :
   String(t).normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
 const txt = (v) => v == null ? "" : String(v).replace(/\s+/g, " ").trim();
 
+/** Nombre sugerido de la organización: texto previo a "F-1" (sin " (1)" de descargas repetidas). "" si no hay. */
 export function nombreEmpresa(archivo) {
-  const stem = archivo.replace(/\.[^.]+$/, "");
+  const stem = archivo.replace(/\.[^.]+$/, "").replace(/\s*\(\d+\)$/, "").trim();
+  if (/^[\s_-]*F-?\d+\b/i.test(stem)) return ""; // p. ej. "_F-1 Objetivos…": el archivo no dice la empresa
   return stem.split(/\s+F-?\d+\b/)[0].trim() || stem;
 }
 
 function celda(XLSX, c) {
   if (!c) return null;
   if (c.t === "n") {
-    if (c.z && XLSX.SSF.is_date(c.z)) { const p = XLSX.SSF.parse_date_code(c.v); return new Date(Date.UTC(p.y, p.m - 1, p.d)); }
+    if (c.z && XLSX.SSF.is_date(c.z)) {
+      // Un número fuera del rango de fechas de Excel (se ve como ##### en Excel) no debe impedir leer el archivo.
+      const p = XLSX.SSF.parse_date_code(c.v);
+      return p && p.y ? new Date(Date.UTC(p.y, p.m - 1, p.d)) : `fecha ilegible (${c.v})`;
+    }
     return c.v;
   }
   if (c.t === "s") return c.v;
@@ -64,6 +73,16 @@ const hojaPorClave = (wb, clave) => wb.SheetNames.find((n) => norm(n).includes(c
 const flag = (f, c, cols) => c - 1 >= 1 && !cols.has(c - 1) && c - 1 <= f.length && esPendiente(f[c - 2]);
 const items = (f, docs, cols, base) => docs.map(([nombre, c, req]) =>
   ({ ...base, documento: nombre, valor: c <= f.length ? f[c - 1] : null, flag: flag(f, c, cols), requerido: req }));
+const CORTE_FIJO = new Date(Date.UTC(2000, 0, 1)); // solo para detectar datos inválidos (no depende de la fecha)
+/** Avisa los valores que no son fecha, NA, FALTANTE ni pendiente: al importar se guardan vacíos. */
+function avisarInvalidos(its, donde, avisos) {
+  for (const it of its) {
+    const e = evaluar(it.valor, it.flag, it.requerido, CORTE_FIJO);
+    if (e?.detalle?.startsWith("Dato inválido"))
+      avisos.push(`${donde}: '${it.documento}' con dato inválido ('${String(it.valor).trim()}'); se carga sin fecha.`);
+  }
+  return its;
+}
 
 /** Lee un libro Excel (ArrayBuffer). Devuelve {empresa, filas, avisos}. */
 export function leerExcel(XLSX, buffer, nombreArchivo, empresaForzada) {
@@ -94,7 +113,7 @@ export function leerExcel(XLSX, buffer, nombreArchivo, empresaForzada) {
         const base = { empresa, categoria: EMPLEADOS,
           subgrupo: [cDis ? txt(f[cDis - 1]) : "", cSuc ? txt(f[cSuc - 1]) : ""].filter(Boolean).join(" / "),
           entidad: `${ap} ${cNo ? txt(f[cNo - 1]) : ""}`.trim(), id: cuil };
-        filas.push(...items(f, docs, cols, base));
+        filas.push(...avisarInvalidos(items(f, docs, cols, base), `Empleados fila ${n} (${base.entidad})`, avisos));
       });
     }
   }
@@ -115,24 +134,38 @@ export function leerExcel(XLSX, buffer, nombreArchivo, empresaForzada) {
         vistos[dom] = n;
         const base = { empresa, categoria: VEHICULOS, subgrupo: cLug ? txt(f[cLug - 1]) : "",
           entidad: `${cMa ? txt(f[cMa - 1]) : ""} ${cMo ? txt(f[cMo - 1]) : ""}`.trim(), id: dom };
-        filas.push(...items(f, docs, cols, base));
+        filas.push(...avisarInvalidos(items(f, docs, cols, base), `Vehículos fila ${n} (${dom})`, avisos));
       });
     }
   }
 
   // Proveedores: un documento por fila; una o más columnas de fecha entre 'Documentos' y 'Frecuencia'.
+  // La columna de grupo se llama distinto según el archivo ("Requisito", "Requisitos", "Carpeta SICOP"…);
+  // si no se reconoce, se usa la primera columna. Una fila con texto solo en esa columna (el nombre de un
+  // subcontratista) abre una sección: esos documentos se gestionan a mano y no se importan (se avisa).
   h = hoja("proveedor", PROVEEDORES);
   if (h) {
-    const { cab, cabOrig, cols } = h, cReq = col(cab, "requisito"), cDoc = col(cab, "documentos"), cFrec = col(cab, "frecuencia");
+    const { cab, cabOrig, cols } = h, cDoc = col(cab, "documentos"), cFrec = col(cab, "frecuencia");
+    let cReq = col(cab, "requisito", "requisitos", "carpeta sicop", "carpeta");
+    if (!cReq && cDoc > 1) cReq = 1;
     if (!(cDoc && cFrec && cFrec - cDoc > 1)) avisos.push("Proveedores: no se detectaron columnas 'Documentos' / fecha / 'Frecuencia'.");
     else {
       const fechas = Object.values(cab).filter((c) => c > cDoc && c < cFrec);
-      h.filas.forEach((f) => {
-        const doc = txt(f[cDoc - 1]);
-        if (!doc) return;
-        const base = { empresa, categoria: PROVEEDORES, subgrupo: cReq ? txt(f[cReq - 1]) : "", entidad: doc, id: "" };
-        filas.push(...items(f, fechas.map((c) => [`Vencimiento ${cabOrig[c]}`, c, true]), cols, base));
+      let seccion = "";
+      const subcontratistas = new Map();
+      h.filas.forEach((f, i) => {
+        const doc = txt(f[cDoc - 1]), grupo = cReq ? txt(f[cReq - 1]) : "";
+        if (!doc) {
+          const vacia = f.every((v, j) => j === cReq - 1 || v == null || (typeof v === "string" && !v.trim()));
+          if (grupo && vacia) seccion = grupo;
+          return;
+        }
+        if (seccion) { subcontratistas.set(seccion, (subcontratistas.get(seccion) || 0) + 1); return; }
+        const base = { empresa, categoria: PROVEEDORES, subgrupo: grupo, entidad: doc, id: "" };
+        filas.push(...avisarInvalidos(items(f, fechas.map((c) => [`Vencimiento ${cabOrig[c]}`, c, true]), cols, base), `Proveedores fila ${i + 2} (${doc})`, avisos));
       });
+      for (const [persona, n] of subcontratistas)
+        avisos.push(`Proveedores: ${n} documento(s) del subcontratista '${persona}' no se importan (se cargan a mano).`);
     }
   }
   if (!filas.length) avisos.push("No se extrajo ningún documento del archivo.");

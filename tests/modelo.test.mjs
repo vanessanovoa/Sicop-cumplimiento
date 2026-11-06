@@ -13,12 +13,12 @@ const MUESTRA = process.env.SICOP_MUESTRA;
 const cuenta = (reg) => { const c = {}; reg.forEach((r) => { const k = `${r.categoria}|${r.estado}`; c[k] = (c[k] || 0) + 1; }); return c; };
 
 test("paridad: Excel -> entidades -> filas da los mismos registros", { skip: !MUESTRA }, () => {
-  const { filas } = leerExcel(XLSX, fs.readFileSync(MUESTRA), "CMAS F-1 Objetivos.xlsx");
+  const { filas } = leerExcel(XLSX, fs.readFileSync(MUESTRA), "Empresa A F-1 Objetivos.xlsx");
   const original = construirRegistros(filas, HOY);
   const { entidades, avisos } = filasAEntidades(filas);
   assert.deepEqual(avisos, [], "el Excel de muestra no debe generar avisos");
   const ents = entidades.map((e, i) => ({ ...e, id: String(i), org_id: "o", archivada_en: null }));
-  const vuelta = construirRegistros(entidadesAFilas(ents, () => "CMAS"), HOY);
+  const vuelta = construirRegistros(entidadesAFilas(ents, () => "Empresa A"), HOY);
   assert.equal(vuelta.length, original.length);
   assert.deepEqual(cuenta(vuelta), cuenta(original));
   const total = (e) => Object.values(e).reduce((a, b) => a + b, 0);

@@ -1,6 +1,6 @@
 // Importación semanal de Excel (solo administrador): el archivo reemplaza los datos de la organización elegida.
 import { nombreEmpresa, norm } from "../loader.js";
-import { $, esc, ico, toast, conBoton } from "../util.js";
+import { $, esc, ico, toast, conBoton, leerLS, escribirLS } from "../util.js";
 import { st, orgsActivas, orgNombre } from "../estado.js";
 import { filasAEntidades, diffImportacion, TIPOS } from "../modelo.js";
 import { confirmar, modal, valor } from "../ui/modal.js";
@@ -14,10 +14,22 @@ function parsear(buffer, nombre) {
   }
   return new Promise((resolve, reject) => { const id = ++seq; esperando.set(id, { resolve, reject }); worker.postMessage({ id, buffer, nombre, empresa: "" }, [buffer]); });
 }
-const sugerirOrg = (nombre) => {
+// Los mismos archivos se cargan todas las semanas: se recuerda (en este navegador) a qué organización fue cada uno.
+const LS_ORGS = "sicop.importar.orgPorArchivo";
+const claveArchivo = (nombre) => norm(nombre.replace(/\.[^.]+$/, "").replace(/\s*\(\d+\)$/, ""));
+const recordarOrg = (nombre, orgId) => escribirLS(LS_ORGS, { ...leerLS(LS_ORGS, {}), [claveArchivo(nombre)]: orgId });
+const compacto = (t) => norm(t).replace(/[^a-z0-9]+/g, "");
+export function sugerirOrg(nombre, orgs = orgsActivas()) {
+  const recordada = leerLS(LS_ORGS, {})[claveArchivo(nombre)];
+  if (recordada && orgs.some((o) => o.id === recordada)) return recordada;
   const n = norm(nombreEmpresa(nombre));
-  return orgsActivas().find((o) => norm(o.nombre) === n)?.id ?? "";
-};
+  const exacta = n && orgs.find((o) => norm(o.nombre) === n);
+  if (exacta) return exacta.id;
+  // El nombre de la organización aparece dentro del nombre del archivo (p. ej. "SICOP <EMPRESA> S.A.xlsx").
+  const arch = compacto(nombre.replace(/\.[^.]+$/, ""));
+  const cand = orgs.filter((o) => compacto(o.nombre).length >= 3 && arch.includes(compacto(o.nombre)));
+  return cand.length === 1 ? cand[0].id : "";
+}
 const ultimaImportacion = (orgId) => st.datos.importaciones.find((i) => i.org_id === orgId)?.fecha ?? null;
 const existentesDe = (orgId) => st.datos.entidades.filter((e) => e.org_id === orgId);
 const calcDiff = (a) => a.orgId ? diffImportacion(a.entidades, existentesDe(a.orgId), ultimaImportacion(a.orgId)) : null;
@@ -78,7 +90,7 @@ function cardArchivo(a) {
   return `<div class="imp-card" data-id="${a.id}"><div class="imp-top"><span class="dot${a.avisos.length ? " load" : ""}"></span>
     <div class="info"><b>${esc(a.nombre)}</b><small class="muted">${a.entidades.length} entidades · hojas: ${esc(tiposTxt)}</small></div>
     <select aria-label="Organización de destino"><option value="">Elegí la organización…</option>${orgs.map((o) => `<option value="${o.id}"${a.orgId === o.id ? " selected" : ""}>${esc(o.nombre)}</option>`).join("")}</select>
-    ${!a.orgId ? `<button class="btn sm" data-crear>${ico("plus", "sm")}Crear “${esc(sug)}”</button>` : ""}
+    ${!a.orgId ? `<button class="btn sm" data-crear>${ico("plus", "sm")}${sug ? `Crear “${esc(sug)}”` : "Crear organización"}</button>` : ""}
     <button class="btn sm" data-quitar aria-label="Quitar archivo">${ico("x", "sm")}</button></div>
     ${d ? `<div class="imp-stats"><div><b>${d.nuevas}</b><span>Nuevas</span></div><div><b>${d.actualizadas}</b><span>Se actualizan</span></div><div><b>${d.restauradas}</b><span>Se restauran</span></div>
       <div class="${d.archivadas ? "warn" : ""}"><b>${d.archivadas}</b><span>Se archivan (no vienen en el archivo)</span></div>
@@ -105,6 +117,7 @@ async function confirmarImportacion(a, btn, redo) {
   await conBoton(btn, async () => {
     const r = await st.backend.importar(a.orgId, a.entidades, a.nombre, a.tipos);
     Object.assign(a, { estado: "hecho", resumen: r });
+    recordarOrg(a.nombre, a.orgId);
     await st.recargar(); redo(); toast(`Importación lista: ${r.nuevas} nuevas, ${r.actualizadas} actualizadas, ${r.archivadas} archivadas`);
   });
 }

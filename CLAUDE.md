@@ -59,16 +59,17 @@ Definidos en `docs/js/loader.js` (`DOCS_EMPLEADOS`, `DOCS_VEHICULOS`) y sembrado
 
 | Categoría | Documentos (requerido) |
 |---|---|
-| Empleados | Apto médico ✔, DNI ✔, Licencia de conducir ✔, Capacitación ✔, Entrega EPP ✔ |
+| Empleados | Apto médico ✔, DNI ✔, Licencia de conducir ✔, Capacitación ✔, Entrega EPP ✔, Seguro de accidentes personales (**opcional**), Pago monotributo (**opcional**; solo monotributistas, migración `004`) |
 | Vehículos | VTV ✔, Póliza ✔, Cuota ✔, Formulario RA-15 (**opcional**) |
-| Proveedores | Un documento por fila; una o más columnas de fecha entre “Documentos” y “Frecuencia” (se nombran `Vencimiento <encabezado>`) |
+| Proveedores | Un documento por fila; una o más columnas de fecha entre “Documentos” y “Frecuencia” (se nombran `Vencimiento <encabezado>`). Columna de grupo: `Requisito`/`Requisitos`/`Carpeta SICOP` o, si no, la primera. Una fila con texto **solo** en la columna de grupo es un **subcontratista**: sus documentos (los que siguen) **no se importan** (se gestionan a mano) y se avisa. |
 
 Quedaron **fuera** (la hoja `sicop` del Excel indica que ya no son requeridos): Manual de seguridad, RA-4, Anexo V, Recibo de sueldo.
 
 ### 2.3 Qué filas se descartan al leer el Excel
 - Empleados con `ABM` distinto de “Alta” (bajas), o sin apellido.
 - Vehículos con `Alta SICOP = NO`, o sin dominio.
-- Proveedores sin texto en “Documentos”.
+- Proveedores sin texto en “Documentos”, y los documentos de secciones de subcontratistas.
+- **Nunca** hay nombres de empresas ni datos de personas en el código: todo se deduce de hojas y encabezados.
 
 ### 2.4 Cifras de referencia (Excel de muestra, corte 2026-11-02)
 358 registros en total: **Empleados** 223 al día / 12 pendientes / 25 vencidos; **Proveedores** 14 al día / 3 por vencer / 6 vencidos; **Vehículos** 67 al día / 1 por vencer / 7 vencidos.
@@ -80,10 +81,11 @@ Estas cifras se verifican en `tests/loader.test.mjs` y en la prueba de paridad d
 
 Archivo tipo `CMAS F-1 Objetivos del Cliente SICOP(Documentación).xlsx`. **No se versiona** (`.gitignore` excluye `*.xlsx`): la hoja `sicop` contiene **credenciales en texto plano**. La app **nunca lee esa hoja** (solo Empleados, Vehículos y Proveedores).
 
-- Nombre de la organización sugerida = texto previo a ` F-1` en el nombre del archivo (`nombreEmpresa`).
+- Nombre de la organización sugerida = texto previo a ` F-1` en el nombre del archivo (`nombreEmpresa`; ignora ` (1)`; vacío si el archivo empieza con `F-1`). El importador **recuerda en localStorage** a qué organización fue cada archivo y, si no, busca una organización cuyo nombre esté contenido en el del archivo.
 - Hojas buscadas por **inclusión del texto normalizado** (sin tildes, minúsculas): `empleado`, `vehiculo`, `proveedor`.
 - Encabezados normalizados con `norm()` (NFKD, sin diacríticos, espacios colapsados, minúsculas). Se resuelven por alias (`apellido`, `nombre`, `cuil`, `abm`, `distribuidora`, `sucursal`, `dominio`, `alta sicop`, `marca`, `modelo`, `lugar donde reside`/`sucursal`, `requisito`, `documentos`, `frecuencia`).
-- **Validaciones con aviso (no bloquean)**: CUIL de 11 dígitos, CUIL duplicado, dominio con formato inusual (`DOMINIO_RE = /^([A-Z]{2}\d{3}[A-Z]{2}|[A-Z]{3}\d{3})$/`), dominio duplicado, hoja ausente, columnas clave ausentes, “no se extrajo ningún documento”.
+- Una celda con formato fecha y número fuera de rango (`#####` en Excel) se lee como texto `fecha ilegible (n)` ⇒ dato inválido (antes rompía la lectura del archivo).
+- **Validaciones con aviso (no bloquean)**: dato inválido en un documento (se carga sin fecha), CUIL de 11 dígitos, CUIL duplicado, dominio con formato inusual (`DOMINIO_RE = /^([A-Z]{2}\d{3}[A-Z]{2}|[A-Z]{3}\d{3})$/`), dominio duplicado, hoja ausente, columnas clave ausentes, “no se extrajo ningún documento”.
 - La salida de `leerExcel(XLSX, buffer, nombre, empresaForzada)` es `{empresa, filas, avisos}` con **filas** `{empresa, categoria, subgrupo, entidad, id, documento, valor, flag, requerido}`. Es el formato común que consumen el motor de reglas y el importador.
 - `construirRegistros(filas, corte, umbral)` aplica `evaluar` y produce **registros** `{empresa, categoria, subgrupo, entidad, id, documento, vencimiento, dias, estado, detalle}` (los que alimentan panel y PDF).
 
@@ -122,7 +124,7 @@ Principios de diseño:
 
 ## 5. Base de datos (Supabase / Postgres)
 
-Se crea ejecutando, **en orden**, `supabase/migrations/001_schema.sql`, `002_rls.sql`, `003_funciones.sql` en el SQL Editor (o pegando `supabase/instalar-todo.sql`, que es la concatenación). **Si se cambia una migración hay que regenerar `instalar-todo.sql`** (ver §10).
+Se crea ejecutando, **en orden**, `supabase/migrations/001_schema.sql`, `002_rls.sql`, `003_funciones.sql`, `004_docs_monotributo.sql` en el SQL Editor (o pegando `supabase/instalar-todo.sql`, que es la concatenación). **Si se cambia una migración hay que regenerar `instalar-todo.sql`** (ver §10).
 
 ### 5.1 Tablas (`001_schema.sql`)
 | Tabla | Columnas clave | Notas |
@@ -240,7 +242,7 @@ Módulos ES nativos (sin bundler para el sitio). Librerías vendorizadas en `doc
 
 ### 7.4 Modo DEV (solo `localhost`/`127.0.0.1`)
 `http://localhost:8000/?dev&rol=admin|trabajador|revisor&muestra=muestra.xlsx&demo&clave&ficha=<tipo>|nuevo-<tipo>&archivo=muestra.xlsx`
-- Datos **en memoria** (se pierden al recargar). `muestra` importa un Excel servido junto al sitio en la organización CMAS (`demo` agrega ARCOR; siempre existe “Empresa vacía”). El backend se siembra como admin y luego se baja al `rol` pedido, por lo que los permisos del rol aplican de verdad.
+- Datos **en memoria** (se pierden al recargar). `muestra` importa un Excel servido junto al sitio en la organización “Empresa A” (`demo` agrega “Empresa B”; siempre existe “Empresa vacía”). El backend se siembra como admin y luego se baja al `rol` pedido, por lo que los permisos del rol aplican de verdad.
 - `clave` simula primer ingreso; `ficha` abre una ficha (para capturas); `archivo` simula elegir un Excel en Importar.
 - **No existe en producción** (exige hostname local). No es un mecanismo de seguridad: no da acceso a Supabase.
 
@@ -277,7 +279,7 @@ Días de “Por vencer” (1–90), “usar fecha de hoy” o fecha de corte man
 
 ## 9. Pruebas
 
-Comando: `SICOP_MUESTRA="/ruta/al/Excel.xlsx" npm test` (`node --test tests/`). Sin `SICOP_MUESTRA` se saltean las pruebas que usan el Excel real. Hoy: **40 pruebas** (37 pasan sin Excel; las 3 que usan el Excel real se saltean si falta `SICOP_MUESTRA`), **0 fallan**.
+Comando: `SICOP_MUESTRA="/ruta/al/Excel.xlsx" npm test` (`node --test tests/`). Sin `SICOP_MUESTRA` se saltean las pruebas que usan el Excel real. Hoy: **44 pruebas** (41 pasan sin Excel; las 3 que usan el Excel real se saltean si falta `SICOP_MUESTRA`), **0 fallan**.
 
 | Archivo | Qué cubre |
 |---|---|
@@ -303,7 +305,7 @@ node scripts/build-icons.mjs        # regenera docs/vendor/icons.svg (lista de �
 python3 -m http.server --directory docs 8010   # servir en local (http://localhost:8010/?dev&rol=admin)
 
 # Regenerar el SQL único (tras cambiar migraciones)
-for f in 001_schema 002_rls 003_funciones; do echo "-- ===== $f.sql ====="; cat supabase/migrations/$f.sql; echo; done > supabase/instalar-todo.sql
+for f in 001_schema 002_rls 003_funciones 004_docs_monotributo; do echo "-- ===== $f.sql ====="; cat supabase/migrations/$f.sql; echo; done > supabase/instalar-todo.sql
 
 # Edge Function (la CLI en modo agente exige --yes explícito del usuario)
 npx supabase login
