@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SICOP · Control de cumplimiento</title>
+<title>GV Soluciones · Gestión de Documentos</title>
+<link rel="icon" type="image/png" href="img/logo.png">
 <meta name="robots" content="noindex">
 <link rel="preload" href="vendor/fonts/inter-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="css/style.css">
@@ -11,9 +12,14 @@
 <body>
 
 <!-- ACCESO -->
-<div id="login" class="login" hidden>
+<div id="login" class="login">
   <section class="login-brand">
-    <div class="logo"><span class="mark"></span><strong>SICOP</strong></div>
+    <div class="logo" style="flex-direction:column; align-items:flex-start; gap:8px;">
+      <div style="background:#ffffff; padding:6px 14px; border-radius:8px; display:inline-flex; align-items:center; box-shadow:0 2px 8px rgba(0,0,0,0.12);">
+        <img src="img/logo.png" alt="GV Soluciones" style="height:36px; width:auto; display:block;">
+      </div>
+      <span style="font-size:12px; font-weight:700; color:#DCE8F8; letter-spacing:0.05em; text-transform:uppercase;">Gestión de Documentos</span>
+    </div>
     <div class="login-hero">
       <span class="pill">Registro centralizado</span>
       <h1>Cumplimiento documental, bajo control.</h1>
@@ -24,7 +30,7 @@
         <li><svg class="ico"><use href="vendor/icons.svg#i-circle-check"/></svg>Acceso según tu rol: administrador, trabajador o revisor</li>
       </ul>
     </div>
-    <small>© SICOP · Uso interno</small>
+    <small>© GV Soluciones · Gestión de Documentos · Uso interno</small>
   </section>
   <section class="login-form">
     <form id="form-login" class="login-box" autocomplete="on">
@@ -51,14 +57,17 @@
 <div id="shell" class="shell" hidden>
   <div id="scrim" class="scrim" hidden></div>
   <aside class="side" id="side">
-    <div class="logo dark"><span class="mark"></span><strong>SICOP</strong></div>
+    <div class="logo dark" style="flex-direction:column; align-items:flex-start; gap:6px; padding:0 6px 18px;">
+      <img src="img/logo.png" alt="GV Soluciones" style="height:36px; width:auto; max-width:100%; object-fit:contain; display:block;">
+      <span style="font-size:11px; font-weight:700; color:var(--s500); letter-spacing:0.04em; text-transform:uppercase;">Gestión de Documentos</span>
+    </div>
     <nav id="nav" aria-label="Principal"></nav>
   </aside>
 
   <div class="main-col">
     <header class="topbar">
       <button id="btn-menu" class="icon-btn only-mobile" aria-label="Abrir menú"><svg class="ico"><use href="vendor/icons.svg#i-panel-left"/></svg></button>
-      <div class="crumbs"><span>SICOP</span><svg class="ico sm"><use href="vendor/icons.svg#i-chevron-right"/></svg><strong id="crumb">Panel</strong></div>
+      <div class="crumbs"><span>GV Soluciones</span><svg class="ico sm"><use href="vendor/icons.svg#i-chevron-right"/></svg><strong id="crumb">Panel</strong></div>
       <label class="search-global"><svg class="ico"><use href="vendor/icons.svg#i-search"/></svg>
         <input id="buscar" type="search" placeholder="Buscar persona, CUIL, dominio o documento…" aria-label="Buscar"></label>
       <div class="top-actions">

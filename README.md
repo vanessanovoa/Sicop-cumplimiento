@@ -1,4 +1,4 @@
-# SICOP – Consolidación y reportes
+# GV Soluciones · Gestión de Documentos – Consolidación y reportes
 
 ```bash
 python -m venv .venv && .venv/bin/pip install -r requirements.txt
@@ -8,4 +8,3 @@ python -m venv .venv && .venv/bin/pip install -r requirements.txt
 ```
 Reglas: Vencido ≤ 0 días · Por vencer 1–15 · Pendiente = indicador `1` a la izquierda de la fecha · Al día > 15.
 La empresa se toma del nombre del archivo (texto previo a " F-1").
-hola mundo
